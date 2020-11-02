@@ -5,7 +5,6 @@ import os
 import multiprocessing
 import statistics
 
-import nltk
 import argparse
 
 if not os.path.exists("formatted_text"):
@@ -63,76 +62,17 @@ class Sharding:
         for input_file in self.input_files:
             print('input file:', input_file)
             with open(input_file, mode='r', newline='\n') as f:
+                pline = []
                 for i, line in enumerate(f):
-                    if line.strip():
-                        self.articles[global_article_count] = line.rstrip()
+                    if not line.strip() and pline:
+                        self.articles[global_article_count] = " ".join(pline)
+                        self.sentences[global_article_count] = list(pline)
                         global_article_count += 1
+                        pline.clear()
+                    else:
+                        pline.append(line.strip())
 
-        print('End: Loading Articles: There are',
-              len(self.articles), 'articles.')
-
-    def segment_articles_into_sentences(self, segmenter):
-        print('Start: Sentence Segmentation')
-        if len(self.articles) is 0:
-            self.load_articles()
-
-        assert len(
-            self.articles) is not 0, 'Please check that input files are present and contain data.'
-
-        # TODO: WIP: multiprocessing (create independent ranges and spawn processes)
-        use_multiprocessing = 'serial'
-
-        def chunks(data, size=len(self.articles)):
-            it = iter(data)
-            for i in range(0, len(data), size):
-                yield {k: data[k] for k in islice(it, size)}
-
-        if use_multiprocessing == 'manager':
-            manager = multiprocessing.Manager()
-            return_dict = manager.dict()
-            jobs = []
-            n_processes = 7    # in addition to the main process, total = n_proc+1
-
-            def work(articles, return_dict):
-                sentences = {}
-                for i, article in enumerate(articles):
-                    sentences[i] = segmenter.segment_string(articles[article])
-
-                    if i % 5000 == 0:
-                        print('Segmenting article', i)
-
-                return_dict.update(sentences)
-
-            for item in chunks(self.articles, len(self.articles)):
-                p = multiprocessing.Process(
-                    target=work, args=(item, return_dict))
-
-                # Busy wait
-                while len(jobs) >= n_processes:
-                    pass
-
-                jobs.append(p)
-                p.start()
-
-            for proc in jobs:
-                proc.join()
-
-        elif use_multiprocessing == 'queue':
-            work_queue = multiprocessing.Queue()
-            jobs = []
-
-            for item in chunks(self.articles, len(self.articles)):
-                pass
-
-        else:    # serial option
-            for i, article in enumerate(self.articles):
-                self.sentences[i] = segmenter.segment_string(
-                    self.articles[article])
-
-                if i % 5000 == 0:
-                    print('Segmenting article', i)
-
-        print('End: Sentence Segmentation')
+        print('End: Loading Articles: There are', len(self.articles), 'articles.')
 
     def init_output_files(self):
         print('Start: Init Output Files')
@@ -150,7 +90,6 @@ class Sharding:
         result = 0
         for article_id in shard:
             result += len(self.sentences[article_id])
-
         return result
 
     def distribute_articles_over_shards(self):
@@ -254,6 +193,9 @@ class Sharding:
 
             training_median = statistics.median(training_counts)
 
+            #if len(unused_article_set) < 29:
+             #   break
+
             print('Distributing data over shards:', len(
                 unused_article_set), 'articles remaining.')
 
@@ -277,29 +219,16 @@ class Sharding:
         with open(shard_name, mode='w', newline='\n') as f:
             for article_id in shard:
                 for line in self.sentences[article_id]:
-                    f.write(line + '\n')
+                    f.write(str(line) + '\n')
 
                 f.write('\n')  # Line break between articles
 
 
-nltk.download('punkt')
 args = parser.parse_args()
 
-
-class NLTKSegmenter:
-    def __init(self):
-        pass
-
-    def segment_string(self, article):
-        # Load your self-made tokenizer here, with language= parameter.
-        return nltk.tokenize.sent_tokenize(article)
-
-
-segmenter = NLTKSegmenter()
-sharding = Sharding([args.input_file], "formatted_text/formatted_wiki",
+sharding = Sharding([args.input_file], "formatted_text/formatted_text",
                     args.num_shards, 0)
 
 sharding.load_articles()
-sharding.segment_articles_into_sentences(segmenter)
 sharding.distribute_articles_over_shards()
 sharding.write_shards_to_disk()

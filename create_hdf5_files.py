@@ -50,7 +50,7 @@ parser.add_argument(
     '--do_lower_case',
     type=int,
     help='Specify whether it is cased (0) or uncased (1) (any number greater than 0 will be treated as uncased)',
-    default=1
+    default=0
 )
 
 parser.add_argument(
@@ -69,16 +69,15 @@ hdf5_tfrecord_folder_prefix = "hdf5_lower_case_" + str(args.do_lower_case) + "_s
 
 last_process = None
 
-if not os.path.exists(hdf5_tfrecord_folder_prefix + "/wikicorpus"):
-    os.makedirs(hdf5_tfrecord_folder_prefix + "/wikicorpus")
+if not os.path.exists(hdf5_tfrecord_folder_prefix + "/textcorpus"):
+    os.makedirs(hdf5_tfrecord_folder_prefix + "/textcorpus")
 
 
-def create_record_worker(shard_id, output_format='hdf5'):
+def create_record_worker(shard_id,file, output_format='hdf5'):
     bert_preprocessing_command = 'python3 create_pretraining_data.py'
-    bert_preprocessing_command += ' --input_file=' + \
-        'formatted_text/formatted_wiki_training_' + str(shard_id) + '.txt'
+    bert_preprocessing_command += ' --input_file=formatted_text/' + file
     bert_preprocessing_command += ' --output_file=' + hdf5_tfrecord_folder_prefix + \
-        '/wikicorpus/wiki_training_' + str(shard_id) + '.' + output_format
+        '/textcorpus/text_training_' + str(shard_id) + '.' + output_format
     bert_preprocessing_command += ' --vocab_file=' + str(args.vocab_file)
     bert_preprocessing_command += ' --do_lower_case' if args.do_lower_case else ''
     bert_preprocessing_command += ' --max_seq_length=' + \
@@ -99,11 +98,10 @@ def create_record_worker(shard_id, output_format='hdf5'):
         bert_preprocessing_process.wait()
     return last_process
 
-
 files = os.listdir("formatted_text")
 
 for i in range(len(files)):
-    last_process = create_record_worker(i)
+    last_process = create_record_worker(i,files[i])
 
 
 last_process.wait()

@@ -1,0 +1,5 @@
+langdetect
+h5py
+numpy
+tqdm
+boto3
